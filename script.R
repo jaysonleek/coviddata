@@ -74,6 +74,9 @@ states$weeklynew <- states$cases - states$aweekago
 
 states$weeksago <- sapply(seq_len(nrow(states)), function(act) with(states, sum(cases[date == (date[act] - 21) & state == state[act]])))
 
+California$weeksago <- sapply(seq_len(nrow(California)), function(act) with(California, sum(cases[date == (date[act] - 21)])))
+
+
 ## Add a column for the estimated number of active cases (total - total from 3 weeks ago)
 
 states$active <- states$cases - states$weeksago
@@ -188,7 +191,7 @@ rm(list = ls())
 
 ## set working dir
 
-setwd("C:/Users/jayso/OneDrive/Desktop/coviddata")
+setwd("C:/Users/jayso/OneDrive/Desktop/covid-data")
 
 ## call required libraries
 
@@ -215,14 +218,12 @@ counties$fips[counties$state == "Northern Mariana Islands"] = 6900
 
 ## Read county population values
 
-countypop <- fread("C:/RWD/countypopbyfips2.csv")
-cbsa <- fread("C:/Users/jayso/OneDrive/Desktop/coviddata/fipscsacbsa.csv")
+countydemo <- fread("./demobyfips.csv")
 
 ## merge county data with county population
 
 
-counties <- left_join(counties, countypop, by = "fips", all.x = TRUE)
-counties <- left_join(counties, cbsa, by = "fips", all.x = TRUE)
+counties <- left_join(counties, countydemo, by = "fips", all.x = TRUE)
 
 
 
@@ -230,13 +231,9 @@ counties <- left_join(counties, cbsa, by = "fips", all.x = TRUE)
 
 counties$date <- as.Date(counties$date)
 
-## Make fips, state, county factors
-
-counties$fips <- as.factor(counties$fips)
-counties$state <- as.factor(counties$state)
-counties$county <- as.factor(counties$county)
 
 ## Add a column for yesterday's cases (with timer so I have a benchmark for judging improvements)
+
 
 system.time({
         counties$adayago <-
@@ -259,7 +256,8 @@ system.time({
 
   counties$newcases <- counties$cases - counties$adayago
   
-  counties$svnDAnc <-
+system.time({
+    counties$svnDAnc <-
     sapply(seq_len(nrow(counties)), 
            function(x) with(counties, 
                             mean(newcases[date >= (date[x] - 7) & date <= date[x] & fips == fips[x]], na.rm = TRUE)))
@@ -267,7 +265,7 @@ system.time({
     counties$svnDAlast <- 
     sapply(seq_len(nrow(counties)),
             function(sumx) with(counties,
-            sum(svnDAnc[date == (date[sumx] - 7) & fips == fips[sumx]], na.rm = TRUE)))
+            sum(svnDAnc[date == (date[sumx] - 7) & fips == fips[sumx]], na.rm = TRUE)))})
   
   
     system.time({
@@ -286,7 +284,6 @@ counties$actgrowthpp <- (counties$active - counties$actaweekago) / counties$popu
 
 
 
-
   
   
   
@@ -296,21 +293,6 @@ countiesDT$newcasesW <- ifelse(countiesDT$cases - countiesDT$aweekago < 0, 0, co
 
 countiesDT$active <- ifelse(countiesDT$cases - countiesDT$thrweekago < 0, 0, countiesDT$cases - countiesDT$thrweekago)
 
-
-NYCfix <- rbind(c("New York City", "New York", "361111"))
-colnames(NYCfix) <- c("county", "state", "fips")
-countiesDT <- left_join(countiesDT, NYCfix2, by = "fips", all.x = TRUE)
-NYCfix2$fips <- as.integer(NYCfix2$fips)
-
-
-system.time({
-        RI$adayago <- sapply(seq_len(nrow(RI)), 
-               function(ayer) with(RI, 
-               sum(cases[date == (date[ayer] - 1) & fips == fips[ayer]], na.rm = TRUE)))})
-
-system.time({
-          RI$adayago <- sum(RI$cases[date == (RI$date - 1) & fips == RI$fips])
-})
 
 
 data.frame(Count = colSums(df[,-1] == 'Y'),    # count of "Y"s in each column
@@ -362,25 +344,27 @@ system.time({
 
 ## group by city
 
-basic_summ = filter(counties, date == as.Date("2020-06-13"))
-basic_summ = group_by(basic_summ, cbsatitle, csatitle)
+latest <- max(counties$date)
+basic_summ = filter(counties, date == as.Date(latest))
+basic_summ$csba <- as.factor(basic_summ$csba)
+basic_summ$csa <- as.factor(basic_summ$csa)
+basic_summ = group_by(basic_summ, csba, csa)
 basic_summ = summarise(basic_summ, sumcases = sum(cases), sumactive = sum(active), 
                        sumpop = sum(population), activepp = sum(active) / sum(population) * 100000)
 
 ## group by state
-state_summ = filter(counties, date == as.Date("2020-06-13"))
+state_summ = filter(counties, date == as.Date(latest))
 state_summ = group_by(state_summ, state)
 state_summ = summarise(state_summ, sumcases = sum(cases, na.rm = T), sumactive = sum(active, na.rm = T), 
                        sumpop = sum(population, na.rm = T), activepp = sum(active, na.rm = T) / sum(population, na.rm = T) * 100000)
 
 state_summ <- state_summ[state_summ$sumpop > 0,]
 
-str(countiesDT)
 
 
 ## group by division
 
-div_summ = filter(counties, date == as.Date("2020-05-13"))
+div_summ = filter(counties, date == as.Date(latest))
 div_summ = group_by(div_summ, division)
 div_summ = summarise(div_summ, sumcases = sum(cases, na.rm = T), sumactive = sum(active, na.rm = T),
                      sumpop = sum(population, na.rm = T), 
@@ -435,3 +419,39 @@ plot3fips <- function(f1, f2, f3) { # co = the counties whose data we wish to pl
     geom_line(aes(y = activepp), color = "blue", size = 2) +
     labs(title = t4, x = "Date")
 }  
+
+
+
+
+### 5. Cross validation ------
+
+library(ggplot2)
+library(ggthemes)
+library(zoo)
+library(xts)
+library(quantmod)
+library(forecast)
+library(fpp)
+library(fpp2)
+library(tidyverse)
+library(caret)
+
+
+set.seed(123)
+CFR5 <- read.csv("./CFR3.csv")
+
+train.control <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+model <- train(CFR ~., data = CFRdata1, method = "lm", trControl = train.control)
+
+print(model)
+
+
+
+
+usa$date <- as.Date(usa$date)
+
+usa$thrwksago <-
+  sapply(seq_len(nrow(usa)), 
+         function(x) with(usa, 
+                          sum(cases[date == (date[x] - 21)], na.rm = TRUE)))
