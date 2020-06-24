@@ -455,3 +455,10 @@ usa$thrwksago <-
   sapply(seq_len(nrow(usa)), 
          function(x) with(usa, 
                           sum(cases[date == (date[x] - 21)], na.rm = TRUE)))
+
+
+
+
+
+
+## DT
