@@ -416,7 +416,7 @@ plot3fips <- function(f1, f2, f3) { # co = the counties whose data we wish to pl
   t4 <- paste("Active per 100K")
   ggplot(s1, aes(x = date)) +
     facet_wrap(~county) +
-    geom_line(aes(y = activepp), color = "blue", size = 2) +
+    geom_line(aes(y = active), color = "blue", size = 2) +
     labs(title = t4, x = "Date")
 }  
 
@@ -462,3 +462,9 @@ usa$thrwksago <-
 
 
 ## DT
+
+
+counties$peaktodate <-
+  sapply(seq_len(nrow(counties)), 
+         function(x) with(counties, 
+                          max(active[date <= date[x] & fips == fips[x]], na.rm = TRUE)))
