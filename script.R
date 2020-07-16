@@ -74,7 +74,6 @@ states$weeklynew <- states$cases - states$aweekago
 
 states$weeksago <- sapply(seq_len(nrow(states)), function(act) with(states, sum(cases[date == (date[act] - 21) & state == state[act]])))
 
-California$weeksago <- sapply(seq_len(nrow(California)), function(act) with(California, sum(cases[date == (date[act] - 21)])))
 
 
 ## Add a column for the estimated number of active cases (total - total from 3 weeks ago)
@@ -83,7 +82,8 @@ states$active <- states$cases - states$weeksago
 
 ## Add a column to calculate the active cases per 100,000 people
 
-states$activepp <- states$active / states$Population * 100000
+
+states$activepp <- states$active / states$population * 100000
 
 ## Add a column to calculate the number of recovered cases (total - active - deaths)
 
@@ -91,22 +91,55 @@ states$recovered <- states$cases - states$active - states$deaths
 
 ## Add a column to calculate the number of recovered cases per 100,000 people
 
-states$recoveredpp <- states$recovered / states$Population * 100000
+states$recoveredpp <- states$recovered / states$population * 100000
 
 ## Add a column to calculate weekly growth as a percent
 states$weeklygrowth <- states$weeklynew / states$aweekago
 
 ## Add a column to calculate weekly growth per 100,000 people
 
-states$actgrowthpp <- states$active - 
+states$actgrowthpp <- states$active / states$population *100000
 
 ## Add a column for total cases per 100,000
 
-states$casespp <- states$cases / states$Population * 100000
+states$casespp <- states$cases / states$population * 100000
 
 ## turn states into factor
 
 states$state <-as.factor(states$state)
+states$region <- as.factor(states$region)
+states$division <- as.factor(states$division)
+
+
+
+## Turn a data column into a categorical variable
+
+states$activeppF <- cut(states$activepp, breaks = quantile(states$activepp))
+table(states$activeppF)
+
+library(Hmisc)
+
+states$activeppF <- cut2(states$activepp, g = 4)
+table(states$activeppF)
+
+## yesno <- sample(c("yes", "no"), size = 10, replace = TRUE)
+
+## yesnofac <- factor(yesno, levels = c("yes", "no"))
+
+## relevel(yesnofac, ref = "yes")
+
+## as.numeric(yesnofac)
+
+
+library(plyr)
+
+## restData2 <- mutate(restData, zipGroups = cut2(zipCode, g = 4))
+
+## table(restData2$zipGroups)
+
+
+
+##-----
 
 ## Load purrr
 
@@ -116,6 +149,26 @@ library(purrr)
 
 states$newcasesavg <- sapply(seq_len(nrow(states)), function(act) with(states, mean(newcases[date <= (date[act] - 7) & state == state[act]], na.rm = TRUE)))
 
+## Group by division
+
+div_summ = filter(states, date == as.Date(max(states$date)))
+div_summ = group_by(div_summ, division)
+div_summ = summarise(div_summ, sumcases = sum(cases, na.rm = T), sumactive = sum(active, na.rm = T),
+                     sumpop = sum(population, na.rm = T), 
+                     activepp = sum(active, na.rm = T) / sum(population, na.rm = T) * 100000)
+
+
+div_summ2 <- table(today$division, today$activepp)
+
+states$state <- as.factor(states$state)
+
+states2 <- states %>% 
+  group_by(state) %>% 
+  select(date, activepp) %>% 
+  filter(min_rank(desc(activepp)) <= 1) %>% 
+  arrange(state, desc(activepp))
+
+levels(states$state)
 
 ## 2. Functions for analyzing and plotting the states data.frame ----
 
@@ -161,6 +214,15 @@ plot37DA <- function(st1, st2, st3) { # st = the state whose data we wish to plo
     geom_line(aes(y = sevdayavg), color = "blue", size = 2) +
     labs(title = t4, x = "Date")
 }
+
+
+plotUSA <- function() {
+  ggplot(ariz, aes(x = date)) +
+    geom_line(aes(y = activepp), color = "blue", size = 2) 
+}
+
+
+
 
 
 ## Filter the latest numbers
@@ -213,8 +275,7 @@ counties$fips[counties$state == "Puerto Rico"] = 7200
 counties$fips[counties$state == "Guam"] = 6600
 counties$fips[counties$state == "Virgin Islands"] = 7800
 counties$fips[counties$state == "Northern Mariana Islands"] = 6900
-
-
+counties <- counties[counties$county != "Unknown"]
 
 ## Read county population values
 
@@ -252,7 +313,8 @@ system.time({
                 sum(cases[date == (date[x] - 21) & fips == fips[x]], na.rm = TRUE)))})
 
   counties$active <- counties$cases - counties$thrweekago
-  
+
+  counties$activepp <- counties$active / counties$population * 100000  
 
   counties$newcases <- counties$cases - counties$adayago
   
@@ -467,4 +529,15 @@ usa$thrwksago <-
 counties$peaktodate <-
   sapply(seq_len(nrow(counties)), 
          function(x) with(counties, 
-                          max(active[date <= date[x] & fips == fips[x]], na.rm = TRUE)))
+                          max(activepp[date <= date[x] & fips == fips[x]], na.rm = TRUE)))
+
+
+
+countiesDT <- data.table(counties)
+countiesDT[, peaked := activepp != peaktodate]
+
+countiesDT[, actppvstavg := {tmp <- sapply(seq_len(nrow(countiesDT)),
+                          function(x) with(countiesDT, 
+                          mean(activepp[date <= (date[x] - 1) & state == state[x]]))); 
+                          activepp / tmp}]
+
