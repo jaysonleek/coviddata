@@ -217,11 +217,18 @@ plot37DA <- function(st1, st2, st3) { # st = the state whose data we wish to plo
 
 
 plotUSA <- function() {
-  ggplot(ariz, aes(x = date)) +
-    geom_line(aes(y = activepp), color = "blue", size = 2) 
+  ggplot(states, aes(x = date)) +
+        facet_wrap(~division) +
+        geom_line(aes(y = sevdayavg), color = "blue", size = 2) 
 }
 
 
+ENCentral <- states %>% 
+  filter(division == "East North Central")
+
+ggplot(ENCentral, aes(x = date)) +
+      facet_wrap(. ~ state) +
+      geom_line(aes(y = sevdayavg), color = "darkred", size = 2)
 
 
 
@@ -288,6 +295,40 @@ counties <- left_join(counties, countydemo, by = "fips", all.x = TRUE)
 
 
 
+## filter to cities in/around Mississippi
+
+counties <- counties[counties$state == "Mississippi"]
+
+
+MScitynames <- countiesMS$csba
+MScitynames <- unique(MScitynames)
+MScitynames <- MScitynames[MScitynames != ""]
+
+counties <- counties[counties$csba %in% MScitynames]
+
+ggplot(counties, aes(x = date)) +
+   geom_line(aes(y = activepp), col = "blue", size = 2)
+
+
+x <- round(runif(1000, 0, 100))
+y <- x + rnorm(1000, 0, 30)
+summary(y)
+sd(y)
+range(y)
+mean(y)
+
+qqplot(x, y)
+
+plot(ecdf(x))
+
+xy <- sample(x, 200)
+
+mean(x)
+
+summary(xy)
+
+plot(ecdf(xy))
+
 ## Make the date column a format that R will recognize
 
 counties$date <- as.Date(counties$date)
@@ -296,13 +337,35 @@ counties$date <- as.Date(counties$date)
 ## Add a column for yesterday's cases (with timer so I have a benchmark for judging improvements)
 
 
+counties$adayago2 <- for (i in 1:nrow(counties))
+  
+
+  
+    sapply(seq_len(nrow(counties)),
+         function(x) with(counties,))
+
+
+rep(c("a", "b", "c"))
+
+num_repeat <- 10
+
+dates <- data.frame(rep(
+  seq(as.Date('2017-01-01'), as.Date('2017-12-31'), by = 'days'), 
+  times = num_repeat))
+
+
+
 system.time({
         counties$adayago <-
                 sapply(seq_len(nrow(counties)), 
                 function(x) with(counties, 
                 sum(cases[date == (date[x] - 1) & fips == fips[x]], na.rm = TRUE)))
 
-  counties$aweekago <-
+
+        
+        
+        
+          counties$aweekago <-
                 sapply(seq_len(nrow(counties)), 
                 function(x) with(counties, 
                 sum(cases[date == (date[x] - 7) & fips == fips[x]], na.rm = TRUE)))
@@ -404,7 +467,7 @@ system.time({
                        function(ayer) with(RI, 
                                            sum(cases[date == (date[ayer] - 7) & fips == fips[ayer]], na.rm = TRUE)))})
 
-## group by city
+  ## group by city
 
 latest <- max(counties$date)
 basic_summ = filter(counties, date == as.Date(latest))
@@ -413,6 +476,9 @@ basic_summ$csa <- as.factor(basic_summ$csa)
 basic_summ = group_by(basic_summ, csba, csa)
 basic_summ = summarise(basic_summ, sumcases = sum(cases), sumactive = sum(active), 
                        sumpop = sum(population), activepp = sum(active) / sum(population) * 100000)
+
+
+summary(basic_summ)
 
 ## group by state
 state_summ = filter(counties, date == as.Date(latest))
@@ -478,9 +544,41 @@ plot3fips <- function(f1, f2, f3) { # co = the counties whose data we wish to pl
   t4 <- paste("Active per 100K")
   ggplot(s1, aes(x = date)) +
     facet_wrap(~county) +
-    geom_line(aes(y = active), color = "blue", size = 2) +
+    geom_line(aes(y = active), color = "blue", size = 1) +
     labs(title = t4, x = "Date")
 }  
+
+
+
+counties <- counties %>% group_by(csba)
+
+ggplot(counties, aes(x = date)) +
+  facet_wrap(. ~ csa) +
+  geom_line(aes(y = activepp), color = "orange", size = 1)
+
+today <- counties %>% filter(date == "2020-08-23")
+
+
+today$log <- log(today$activepp)
+meanlog <- mean(today$log)
+today$sd <- sd(today$activepp)
+sqrtsd <- sqrt(175.5)
+today$log2 <- (today$log - meanlog)/sqrtsd
+
+boxplot(today$log2)
+
+max(counties$date)
+
+
+
+cutpoints <- quantile(today$activepp, seq(0, 1, length = 10), na.rm = TRUE)
+
+today$activecut <- cut(today$activepp, cutpoints)
+
+levels(today$activecut)
+
+
+
 
 
 
@@ -541,3 +639,24 @@ countiesDT[, actppvstavg := {tmp <- sapply(seq_len(nrow(countiesDT)),
                           mean(activepp[date <= (date[x] - 1) & state == state[x]]))); 
                           activepp / tmp}]
 
+
+x <- round(runif(1000, 0, 100))
+x
+quantile(x)
+
+
+
+data(iris)
+head(Iris)
+head(iris)
+
+do.call("rbind", tapply(iris$Sepal.Length, 
+                        iris$Species,
+                        quantile))
+
+
+
+
+statesquant <- do.call("rbind", tapply(statestoday$activepp,
+                        statestoday$state,
+                        quantile))
